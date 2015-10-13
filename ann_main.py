@@ -1,8 +1,133 @@
 __author__ = 'kitt'
 
 
-from random import uniform as randfloat
+from random import uniform as random_float
 import numpy as np
+
+
+class ArtificialNeuralNetwork(object):
+
+    def __init__(self, name, structure):
+        self.name = name
+        self.n_neurons = structure                  # [n_neurons_in, n_neurons_hidden1, ..., n_neurons_hiddenH, n_neurons_out]
+        self.ol_index = len(self.n_neurons)-1       # output layer index
+        self.l_indexes = range(self.ol_index+1)     # layers indexes [0, 1, ..., ol_index]
+        self.neuronsG = list()                      # [gind]
+        self.neuronsLP = dict()                     # [layer_index][position]
+        self.synapsesG = list()                     # [gind]
+        self.synapsesNN = dict()                    # [neuron_from][neuron_to]
+
+        self.create_neurons()
+
+    def create_neurons(self):
+
+        # Input neurons
+        self.neuronsLP[0] = list()
+        for i in range(self.n_neurons[0]):
+            ArtificialInputNeuron(self, 0)
+
+        # Hidden neurons
+        for layer_ind in self.l_indexes[1:-1]:
+            self.neuronsLP[layer_ind] = list()
+            for i in range(self.n_neurons[layer_ind]):
+                ArtificialHiddenNeuron(self, layer_ind)
+
+        # Output neurons
+        self.neuronsLP[self.ol_index] = list()
+        for i in range(self.n_neurons[self.ol_index]):
+            ArtificialOutputNeuron(self, self.ol_index)
+
+    def connect_net_fully_ff(self):
+        for layer_ind in self.l_indexes[:-1]:
+            for neuron_from in self.neuronsLP[layer_ind]:
+                for neuron_to in self.neuronsLP[layer_ind+1]:
+                    ArtificialSynapse(self, neuron_from, neuron_to)
+
+
+class ArtificialNeuron(object):
+
+    def __init__(self, net, layer_ind, layer_id):
+        self.net = net
+        self.layer_ind = layer_ind
+        self.activity = float()
+
+        # Register self
+        self.gind = len(self.net.neuronsG)
+        self.net.neuronsG.append(self)
+        self.layer_pos = len(self.net.neuronsLP[self.layer_ind])
+        self.net.neuronsLP[self.layer_ind].append(self)
+        self.id = layer_id+str(self.layer_pos)
+        self.net.synapsesNN[self] = dict()
+
+        # Graphics
+        self.g_body = None
+        self.g_axon = None
+        self.g_x = None
+        self.g_y = None
+        self.g_axon_x = None
+        self.g_axon_y = None
+
+
+class ArtificialInputNeuron(ArtificialNeuron):
+
+    def __init__(self, net, layer_ind):
+        ArtificialNeuron.__init__(self, net, layer_ind, 'i')
+        self.synapses_out = list()
+
+
+class ArtificialHiddenNeuron(ArtificialNeuron):
+
+    def __init__(self, net, layer_ind):
+        ArtificialNeuron.__init__(self, net, layer_ind, 'h'+str(layer_ind))
+        self.synapses_in = list()
+        self.synapses_out = list()
+        self.z = float()
+        self.bias = float()
+
+    def activate(self):
+        self.z = sum([synapse.neuron_from.activity*synapse.weight for synapse in self.synapses_in])
+        self.activity = sigmoid(self.z)
+
+
+class ArtificialOutputNeuron(ArtificialNeuron):
+
+    def __init__(self, net, layer_ind):
+        ArtificialNeuron.__init__(self, net, layer_ind, 'o')
+        self.synapses_in = list()
+        self.z = float()
+        self.bias = float()
+
+    def activate(self):
+        self.z = sum([synapse.neuron_from.activity*synapse.weight for synapse in self.synapses_in])
+        self.activity = sigmoid(self.z)
+
+
+class ArtificialSynapse(object):
+
+    def __init__(self, net, neuron_from, neuron_to):
+        self.net = net
+        self.neuron_from = neuron_from
+        self.neuron_to = neuron_to
+        self.weight = round(random_float(0.0, 1.0), 2)                  # Randomly set weight
+
+        # Register self
+        self.gind = len(self.net.synapsesG)
+        self.net.synapsesG.append(self)
+        self.net.synapsesNN[neuron_from][neuron_to] = self
+
+        # Graphics
+        self.g_gray_value = None
+        self.g_line = None
+
+    def remove_self(self):
+        self.neuron_from.synapses_out.remove(self)
+        self.neuron_to.synapses_in.remove(self)
+        self.net.synapsesG.remove(self)
+        del self.net.synapsesNN[self.neuron_from][self.neuron_to]
+        del self
+
+
+''' ---------------------------------- STATIC FUNCTIONS ---------------------------------- '''
 
 
 def sigmoid(z):
@@ -11,107 +136,3 @@ def sigmoid(z):
 
 def sigmoid_prime(z):
     return sigmoid(z)*(1-sigmoid(z))
-
-
-class ArtificialNeuralNetwork(object):
-
-    def __init__(self, name, structure):
-        self.name = name
-        self.structure = structure
-        self.n_neurons_in = structure[0]
-        self.nbs_layers_hidden = range(1, len(structure)-1)
-        self.n_neurons_hidden = structure[1:-1]
-        self.n_neurons_out = structure[-1]
-
-        self.neurons_in = list()
-        self.neurons_hidden = dict()
-        self.neurons_out = list()
-
-        self.axons = list()
-        self.dendrites = list()
-
-    def create_neurons(self):
-
-        # Input neurons
-        for neuron_nb in range(1, self.n_neurons_in+1):
-            self.neurons_in.append(ArtificialNeuron(self, '0_'+str(neuron_nb)))
-
-        # Hidden neurons
-        for layer_nb in self.nbs_layers_hidden:
-            self.neurons_hidden[layer_nb] = list()
-            for neuron_nb in range(1, self.n_neurons_hidden[layer_nb-1]+1):
-                self.neurons_hidden[layer_nb].append(ArtificialNeuron(self, str(layer_nb)+'_'+str(neuron_nb)))
-
-        # Output neurons
-        for neuron_nb in range(1, self.n_neurons_out+1):
-            self.neurons_out.append(ArtificialNeuron(self, '-1_'+str(neuron_nb)))
-
-    def connect_net_fully_ff(self):
-        # Input layer to the first hidden layer
-        for neuron_in in self.neurons_in:
-            for neuron_hidden_1 in self.neurons_hidden[1]:
-                neuron_in.axon.create_dendrite(neuron_hidden_1)
-
-        # Hidden layers together
-        for layer_nb in self.nbs_layers_hidden[:-1]:
-            for neuron_hidden_a in self.neurons_hidden[layer_nb]:
-                for neuron_hidden_b in self.neurons_hidden[layer_nb+1]:
-                    neuron_hidden_a.axon.create_dendrite(neuron_hidden_b)
-
-        # The last hidden layer to output layer
-        for neuron_hidden_last in self.neurons_hidden[self.nbs_layers_hidden[-1]]:
-            for neuron_out in self.neurons_out:
-                neuron_hidden_last.axon.create_dendrite(neuron_out)
-
-
-class ArtificialNeuron(object):
-
-    def __init__(self, net, id):
-        self.net = net
-        self.id = id
-        self.dendrites_in = list()
-        self.axon = ArtificialAxon(self.net, self.id+'_a', self)
-        self.bias = float()
-
-        self.x = None
-        self.y = None
-
-
-class ArtificialAxon(object):
-
-    def __init__(self, net, id, neuron):
-        self.net = net
-        self.id = id
-        self.neuron = neuron
-        self.dendrites_out = list()
-        self.value = float()
-        self.out_x = None
-        self.out_y = None
-        self.line = None
-        self.net.axons.append(self)
-
-    def create_dendrite(self, target_neuron):
-        dendrite = ArtificialDendrite(self.net, self.id+'_d_'+str(len(self.dendrites_out)), self, target_neuron)
-        self.dendrites_out.append(dendrite)
-        target_neuron.dendrites_in.append(dendrite)
-
-
-class ArtificialDendrite(object):
-
-    def __init__(self, net, id, axon, target_neuron):
-        self.net = net
-        self.id = id
-        self.axon = axon
-        self.target_neuron = target_neuron
-        self.axon_out_ind = len(self.axon.dendrites_out)
-        self.target_neuron_ind = len(self.target_neuron.dendrites_in)
-        self.global_ind = len(self.net.dendrites)
-        self.weight = round(randfloat(0.0, 1.0), 2)
-        self.line = None
-        self.net.dendrites.append(self)
-
-    def remove_self(self):
-        del self.net.dendrites[self.global_ind]
-        del self.target_neuron.dendrites_in[self.target_neuron_ind]
-        del self.axon.dendrites_out[self.axon_out_ind]
-        del self
