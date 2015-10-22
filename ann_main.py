@@ -1,7 +1,6 @@
 __author__ = 'kitt'
 
 
-from random import uniform as random_float
 import numpy as np
 from ann_support_tools import sigmoid
 
@@ -19,6 +18,14 @@ class ArtificialNeuralNetwork(object):
         self.synapsesNN = dict()                    # [neuron_from][neuron_to]
         self.learning = None                        # Learning algorithm for this network
 
+        # Init net parameters randomly as np.arrays
+        self.weights = [np.random.randn(n, m) for m, n in zip(self.n_neurons[:-1], self.n_neurons[1:])]
+        self.biases = [np.random.randn(n, 1) for n in self.n_neurons[1:]]
+
+        # Coefficients for synapses (useful when removing them)
+        self.synapses_exist = [np.ones((n, m)) for m, n in zip(self.n_neurons[:-1], self.n_neurons[1:])]
+
+        # Create units and connect net
         self.create_neurons()
         self.connect_net_fully_ff()
 
@@ -58,6 +65,20 @@ class ArtificialNeuralNetwork(object):
                 neuron.activate()
 
         return np.array([output_neuron.read() for output_neuron in self.neuronsLP[self.ol_index]], dtype=float)
+
+    def feed_forward_fast(self, a):
+        for b, w in zip(self.biases, self.weights):
+            a = sigmoid(np.dot(w, a)+b)
+        return a
+
+    def map_params(self):
+        # Weights
+        for synapse in self.synapsesG:
+            synapse.set_weight()
+
+        # Biases
+        for neuron in self.neuronsG:
+            neuron.set_bias()
 
     def evaluate(self, X, y, tolerance=0.1, print_all_samples=False):
 
@@ -130,6 +151,16 @@ class ArtificialNeuron(object):
         self.z = sum([synapse.neuron_from.activity*synapse.weight for synapse in self.synapses_in]) + self.bias
         self.activity = sigmoid(self.z)
 
+    def get_bias(self):
+        return self.net.biases[self.layer_ind+1][self.layer_pos][0]
+
+    def set_bias(self):
+        self.bias = self.net.biases[self.layer_ind-1][self.layer_pos][0]
+
+    def set_bias_b(self, b):
+        self.net.biases[self.layer_ind-1][self.layer_pos][0] = b
+        self.set_bias()
+
 
 class ArtificialInputNeuron(ArtificialNeuron):
 
@@ -143,6 +174,15 @@ class ArtificialInputNeuron(ArtificialNeuron):
     def feed(self, x):
         self.activity = x
 
+    def get_bias(self):
+        return None
+
+    def set_bias(self):
+        pass
+
+    def set_bias_b(self, b):
+        self.bias = b
+
 
 class ArtificialHiddenNeuron(ArtificialNeuron):
 
@@ -152,7 +192,7 @@ class ArtificialHiddenNeuron(ArtificialNeuron):
         self.synapses_out = list()
         self.z = float()
         self.d = float()
-        self.bias = float()
+        self.bias = self.net.biases[self.layer_ind-1][self.layer_pos][0]
 
 
 class ArtificialOutputNeuron(ArtificialNeuron):
@@ -162,7 +202,7 @@ class ArtificialOutputNeuron(ArtificialNeuron):
         self.synapses_in = list()
         self.z = float()
         self.d = float()
-        self.bias = float()
+        self.bias = self.net.biases[self.layer_ind-1][self.layer_pos][0]
 
     def read(self):
         return self.activity
@@ -174,7 +214,7 @@ class ArtificialSynapse(object):
         self.net = net
         self.neuron_from = neuron_from
         self.neuron_to = neuron_to
-        self.weight = round(random_float(0.0, 1.0), 2)                  # Randomly set weight
+        self.weight = self.net.weights[self.neuron_from.layer_ind][self.neuron_to.layer_pos][self.neuron_from.layer_pos]
 
         # Register self
         self.gind = len(self.net.synapsesG)
@@ -183,12 +223,24 @@ class ArtificialSynapse(object):
         self.neuron_from.synapses_out.append(self)
         self.neuron_to.synapses_in.append(self)
         self.id = neuron_from.id+'->'+neuron_to.id
+        self.net.synapses_exist[self.neuron_from.layer_ind][self.neuron_to.layer_pos][self.neuron_from.layer_pos] = 1.0
 
         # Graphics
         self.g_gray_value = None
         self.g_line = None
 
+    def get_weight(self):
+        return self.net.weights[self.neuron_from.layer_ind][self.neuron_to.layer_pos][self.neuron_from.layer_pos]
+
+    def set_weight(self):
+        self.weight = self.net.weights[self.neuron_from.layer_ind][self.neuron_to.layer_pos][self.neuron_from.layer_pos]
+
+    def set_weight_w(self, w):
+        self.net.weights[self.neuron_from.layer_ind][self.neuron_to.layer_pos][self.neuron_from.layer_pos] = w
+        self.set_weight()
+
     def remove_self(self):
+        self.net.synapses_exist[self.neuron_from.layer_ind][self.neuron_to.layer_pos][self.neuron_from.layer_pos] = 0.0
         self.neuron_from.synapses_out.remove(self)
         self.neuron_to.synapses_in.remove(self)
         self.net.synapsesG.remove(self)
