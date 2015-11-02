@@ -12,7 +12,7 @@ class ANNLearning(object):
     def __init__(self, learning_name, net):
         self.name = learning_name
         self.net = net
-        self.learning_rate = float()
+        self.learning_rate = None
 
         # Register self to the net
         net.learning = self
@@ -129,33 +129,35 @@ class ANNLearningFastBP(ANNLearning):
 
     def __init__(self, net):
         ANNLearning.__init__(self, 'Fast Back-Prop using NumPy', net)
+        self.epochs = None
+        self.mini_batch_size = None
 
-    def learn(self, training_data, epochs, mini_batch_size, eta, test_data=None):
-        if test_data:
-            n_test = len(test_data)
+    def learn(self, training_data, testing_data=None):
+        if testing_data:
+            n_test = len(testing_data)
         n = len(training_data)
-        for epoch in xrange(1, epochs+1):
+        for epoch in xrange(1, self.epochs+1):
             random.shuffle(training_data)
-            mini_batches = [training_data[k:k+mini_batch_size] for k in xrange(0, n, mini_batch_size)]
+            mini_batches = [training_data[k:k+self.mini_batch_size] for k in xrange(0, n, self.mini_batch_size)]
             for mini_batch in mini_batches:
-                self.update_mini_batch(mini_batch, eta)
-            if test_data:
-                print "Epoch {0}: {1} / {2}".format(epoch, self.evaluate(test_data, tolerance=0.1), n_test)
+                self.update_mini_batch(mini_batch)
+            if testing_data:
+                print "Epoch {0}: {1} / {2}".format(epoch, self.evaluate(testing_data, tolerance=0.1), n_test)
             else:
                 if epoch % 100 == 0:
                     print "Epoch {0} complete".format(epoch)
 
-    def update_mini_batch(self, mini_batch, eta):
+    def update_mini_batch(self, mini_batch):
         nabla_b = [np.zeros(b.shape) for b in self.net.biases]
         nabla_w = [np.zeros(w.shape) for w in self.net.weights]
         for x, y in mini_batch:
             delta_nabla_b, delta_nabla_w = self.backprop(x, y)
             nabla_b = [nb+dnb for nb, dnb in zip(nabla_b, delta_nabla_b)]
             nabla_w = [nw+dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
-        self.net.weights = np.multiply([w-(eta/len(mini_batch))*nw for w, nw in zip(self.net.weights, nabla_w)],
+        self.net.weights = np.multiply([w-(self.learning_rate/len(mini_batch))*nw for w, nw in zip(self.net.weights, nabla_w)],
                                        self.net.synapses_exist)
         #self.net.weights = [w-(eta/len(mini_batch))*nw for w, nw in zip(self.net.weights, nabla_w)]
-        self.net.biases = [b-(eta/len(mini_batch))*nb for b, nb in zip(self.net.biases, nabla_b)]
+        self.net.biases = [b-(self.learning_rate/len(mini_batch))*nb for b, nb in zip(self.net.biases, nabla_b)]
 
     def backprop(self, x, y):
         nabla_b = [np.zeros(b.shape) for b in self.net.biases]

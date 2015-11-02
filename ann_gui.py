@@ -29,11 +29,18 @@ class ANNGui(object):
         # Line
         self.m_w.l_data_loaded.setText('Dataset: '+self.program.dataset.name+' ('+str(self.program.dataset.n_samples_training)+
         '/'+str(self.program.dataset.n_samples_testing)+')')
-        self.m_w.l_net_structure.setText('Net Structure: '+str(self.program.net_structure))
+        self.nn_structure_changed()
 
-        # Net tab
+        # Net Tab
         self.m_w.l_nn_input_neurons.setText('Input neurons: '+str(self.program.dataset.n_input_neurons))
         self.m_w.l_nn_output_neurons.setText('Output neurons: '+str(self.program.dataset.n_output_neurons))
+
+        self.m_w.nn_remove_radio_group = QButtonGroup()
+        self.m_w.nn_remove_radio_group.addButton(self.m_w.rb_nn_remove_po)
+        self.m_w.nn_remove_radio_group.addButton(self.m_w.rb_nn_remove_ew)
+
+        # Learning Tab
+        self.m_w.l_learning_training_samples.setText('Training Samples: '+str(self.program.dataset.n_samples_training))
 
         ''' Connect settings and listeners '''
         # Datasets
@@ -42,16 +49,23 @@ class ANNGui(object):
         # Neural Net
         self.m_w.le_hidden_neurons.editingFinished.connect(self.nn_structure_changed)
         self.m_w.pb_generate_network.clicked.connect(self.generate_net)
+        self.m_w.pb_nn_remove.clicked.connect(self.remove_synapse)
+
+        # Learning
+        self.m_w.sb_learning_epochs.valueChanged.connect(self.learning_settings_changed)
+        self.m_w.sb_learning_learning_rate.valueChanged.connect(self.learning_settings_changed)
+        self.m_w.sb_learning_minibatch_size.valueChanged.connect(self.learning_settings_changed)
+        self.m_w.pb_learning_train_net.clicked.connect(self.train_net)
 
         # View
-        self.m_w.sb_neurons_size.valueChanged.connect(self.settings_changed)
-        self.m_w.sb_axons_length.valueChanged.connect(self.settings_changed)
-        self.m_w.sl_horizontal_spaces.valueChanged.connect(self.settings_changed)
-        self.m_w.sl_vertical_spaces.valueChanged.connect(self.settings_changed)
-        self.m_w.cb_show_neurons_ids.stateChanged.connect(self.settings_changed)
-        self.m_w.cb_show_axons_activities.stateChanged.connect(self.settings_changed)
-        self.m_w.cb_show_synapses_ids.stateChanged.connect(self.settings_changed)
-        self.m_w.cb_show_synapses_weights.stateChanged.connect(self.settings_changed)
+        self.m_w.sb_neurons_size.valueChanged.connect(self.view_settings_changed)
+        self.m_w.sb_axons_length.valueChanged.connect(self.view_settings_changed)
+        self.m_w.sl_horizontal_spaces.valueChanged.connect(self.view_settings_changed)
+        self.m_w.sl_vertical_spaces.valueChanged.connect(self.view_settings_changed)
+        self.m_w.cb_show_neurons_ids.stateChanged.connect(self.view_settings_changed)
+        self.m_w.cb_show_axons_activities.stateChanged.connect(self.view_settings_changed)
+        self.m_w.cb_show_synapses_ids.stateChanged.connect(self.view_settings_changed)
+        self.m_w.cb_show_synapses_weights.stateChanged.connect(self.view_settings_changed)
         self.m_w.pb_redraw_now.clicked.connect(self.m_w.view.redraw_net)
         self.m_w.cb_redraw_everytime.stateChanged.connect(self.redraw_everytime_changed)
 
@@ -65,13 +79,15 @@ class ANNGui(object):
         '/'+str(self.program.dataset.n_samples_testing)+')')
 
         # change I/O structure
-        self.program.net_structure = [self.program.dataset.n_input_neurons, self.program.dataset.n_output_neurons]
-        self.m_w.l_net_structure.setText('Net Structure: '+str(self.program.net_structure))
+        self.nn_structure_changed()
 
-        # Net tab
+        # Net Tab
         self.m_w.l_nn_input_neurons.setText('Input neurons: '+str(self.program.dataset.n_input_neurons))
         self.m_w.l_nn_output_neurons.setText('Output neurons: '+str(self.program.dataset.n_output_neurons))
         self.delete_net()
+
+        # Learning Tab
+        self.m_w.l_learning_training_samples.setText('Training Samples: '+str(self.program.dataset.n_samples_training))
 
     def nn_structure_changed(self):
         self.delete_net()
@@ -85,19 +101,61 @@ class ANNGui(object):
         self.program.net_structure.append(self.program.dataset.n_output_neurons)
         self.m_w.l_net_structure.setText('Net Structure: '+str(self.program.net_structure))
 
+        # NN Tab set ranges for deleting synapses
+        self.m_w.sb_nn_remove_from_l.setMaximum(len(self.program.net_structure)-1)
+        self.m_w.sb_nn_remove_to_l.setMaximum(len(self.program.net_structure))
+        self.m_w.sb_nn_remove_from_n.setMaximum(max(self.program.net_structure))
+        self.m_w.sb_nn_remove_to_n.setMaximum(max(self.program.net_structure))
+
     def delete_net(self):
         self.m_w.view.scene().clear()
         self.m_w.l_net_structure.setStyleSheet('color: Maroon;')
+        self.m_w.l_training.setText('Training has not began yet.')
+        self.m_w.l_training.setStyleSheet('color: Maroon;')
+        self.m_w.pb_nn_remove.setEnabled(False)
+        self.m_w.pb_learning_train_net.setEnabled(False)
         self.program.net = None
 
     def generate_net(self):
         self.program.generate_net()
         self.m_w.view.redraw_net()
         self.m_w.l_net_structure.setStyleSheet('color: DarkGreen;')
+        self.m_w.pb_nn_remove.setEnabled(True)
+        self.m_w.l_learning_algorithm.setText(self.program.net.learning.name)
+        self.program.net.learning.epochs = self.m_w.sb_learning_epochs.value()
+        self.program.net.learning.learning_rate = self.m_w.sb_learning_learning_rate.value()
+        self.program.net.learning.mini_batch_size = self.m_w.sb_learning_minibatch_size.value()
+        self.m_w.pb_learning_train_net.setEnabled(True)
 
-    def settings_changed(self):
+    def remove_synapse(self):
+        if self.m_w.rb_nn_remove_po.isChecked():
+            try:
+                neuron_from = self.program.net.neuronsLP[self.m_w.sb_nn_remove_from_l.value()][self.m_w.sb_nn_remove_from_n.value()]
+                neuron_to = self.program.net.neuronsLP[self.m_w.sb_nn_remove_to_l.value()][self.m_w.sb_nn_remove_to_n.value()]
+                self.program.net.synapsesNN[neuron_from][neuron_to].remove_self()
+            except (ValueError, KeyError):
+                print 'This synapse does not exists.'
+        else:
+            for synapse in self.program.net.synapsesG[:]:
+                if synapse.weight < self.m_w.dsb_nn_remove_w.value():
+                    synapse.remove_self()
+
+        self.m_w.view.redraw_net()
+
+    def learning_settings_changed(self):
+        self.program.net.learning.epochs = self.m_w.sb_learning_epochs.value()
+        self.program.net.learning.learning_rate = self.m_w.sb_learning_learning_rate.value()
+        self.program.net.learning.mini_batch_size = self.m_w.sb_learning_minibatch_size.value()
+
+    def train_net(self):
+        self.m_w.l_training.setStyleSheet('color: DarkGreen;')
+        self.m_w.l_training.setText('Training...')
+        self.program.learn()
+        self.m_w.l_training.setText('Last training process done.')
+
+    def view_settings_changed(self):
         self.m_w.view.neuron_size = self.m_w.sb_neurons_size.value()
-        self.m_w.view.neuron_font_size = self.m_w.view.neuron_size/4
+        self.m_w.view.neuron_font_size = self.m_w.view.neuron_size/5
         self.m_w.view.axon_len = self.m_w.sb_axons_length.value()
         self.m_w.view.hor_space = self.m_w.sl_horizontal_spaces.value()
         self.m_w.view.ver_space = self.m_w.sl_vertical_spaces.value()
@@ -120,7 +178,7 @@ class View(QGraphicsView):
         self.setScene(QGraphicsScene(self))
         self.setGeometry(0, 0, parent.width(), parent.height())
         self.neuron_size = self.m_w.sb_neurons_size.value()
-        self.neuron_font_size = self.neuron_size/4
+        self.neuron_font_size = self.neuron_size/5
         self.axon_len = self.m_w.sb_axons_length.value()
         self.hor_space = self.m_w.sl_horizontal_spaces.value()
         self.ver_space = self.m_w.sl_vertical_spaces.value()

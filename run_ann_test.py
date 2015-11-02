@@ -14,6 +14,7 @@ class Program(object):
         self.gui = None
         self.net_structure = None
         self.net = None
+        self.learning = None
 
     def get_datasets(self):
         self.datasets = get_datasets()
@@ -25,6 +26,11 @@ class Program(object):
 
     def generate_net(self):
         self.net = ArtificialNeuralNetwork('Neural Network', self.net_structure)
+        self.learning = ANNLearningFastBP(self.net)
+
+    def learn(self):
+        self.net.learning.learn(training_data=self.dataset.training_data)
+        self.net.map_params()
 
 if __name__ == '__main__':
 
@@ -36,9 +42,6 @@ if __name__ == '__main__':
 
     ''' Start Application '''
     program.run_gui()
-
-    # Create Network
-    #net = ArtificialNeuralNetwork('XOR_test', [7, 5, 3])
 
     # Net learning
     #ANNLearningFastBP(net)
