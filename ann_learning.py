@@ -188,5 +188,6 @@ class ANNLearningFastBP(ANNLearning):
         return nabla_b, nabla_w
 
     def evaluate(self, test_data, tolerance):
-        test_results = [(np.max(self.net.feed_forward_fast(x)), y) for (x, y) in test_data]
+        test_results = [(np.argmax(self.net.feed_forward_fast(x)), y) for (x, y) in test_data]      # Digits
+        #test_results = [(np.max(self.net.feed_forward_fast(x)), y) for (x, y) in test_data]        # XOR
         return sum(int(abs(x-y) < tolerance) for (x, y) in test_results)

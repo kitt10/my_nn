@@ -136,7 +136,7 @@ class ArtificialNeuron(object):
         self.net.neuronsG.append(self)
         self.layer_pos = len(self.net.neuronsLP[self.layer_ind])
         self.net.neuronsLP[self.layer_ind].append(self)
-        self.id = layer_id+str(self.layer_pos)
+        self.id = layer_id+'.'+str(layer_ind)+'.'+str(self.layer_pos)
         self.net.synapsesNN[self] = dict()
 
         # Graphics
@@ -187,7 +187,7 @@ class ArtificialInputNeuron(ArtificialNeuron):
 class ArtificialHiddenNeuron(ArtificialNeuron):
 
     def __init__(self, net, layer_ind):
-        ArtificialNeuron.__init__(self, net, layer_ind, 'h'+str(layer_ind))
+        ArtificialNeuron.__init__(self, net, layer_ind, 'h')
         self.synapses_in = list()
         self.synapses_out = list()
         self.z = float()
