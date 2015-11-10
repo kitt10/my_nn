@@ -17,20 +17,23 @@ class Program(object):
         self.learning = None
 
     def get_datasets(self):
-        self.datasets = get_datasets()
+        self.datasets = [XOR(), HandwrittenDigits()]
         self.dataset = self.datasets[0]
         self.net_structure = [self.dataset.n_input_neurons, self.dataset.n_output_neurons]
 
     def run_gui(self):
-        self.gui = ANNGui(self)
+        ANNGui(self)
 
     def generate_net(self):
-        self.net = ArtificialNeuralNetwork('Neural Network', self.net_structure)
-        self.learning = ANNLearningFastBP(self.net)
+        self.net = ArtificialNeuralNetwork(program=self, name='Neural Network', structure=self.net_structure)
+        self.learning = BackPropagation(program=self, net=self.net)
+        for dataset in self.datasets:
+            dataset.net = self.net
 
     def learn(self):
-        self.net.learning.learn(training_data=self.dataset.training_data)
-        self.net.map_params()
+        self.learning.learn(training_data=self.dataset.training_data)
+        self.gui.m_w.cb_fake_training_done.setChecked(True)
+
 
 if __name__ == '__main__':
 
@@ -42,19 +45,3 @@ if __name__ == '__main__':
 
     ''' Start Application '''
     program.run_gui()
-
-    # Net learning
-    #ANNLearningFastBP(net)
-    #net.learning.learn(training_data, epochs=10, mini_batch_size=1, eta=1, test_data=test_data)
-    #net.map_params()
-    #net.evaluate(X, y, print_all_samples=True)
-
-    # remove edge and evaluate
-    #net.synapsesNN[net.neuronsLP[0][1]][net.neuronsLP[1][0]].remove_self()
-    #net.synapsesNN[net.neuronsLP[0][0]][net.neuronsLP[1][1]].remove_self()
-    #net.evaluate(X, y, print_all_samples=True)
-
-    # re-train and evaluate again
-    #net.learning.learn(training_data, epochs=1000, mini_batch_size=1, eta=1, test_data=test_data)
-    #net.map_params()
-    #net.evaluate(X, y, print_all_samples=True)

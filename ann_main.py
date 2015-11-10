@@ -7,7 +7,8 @@ from ann_support_tools import sigmoid
 
 class ArtificialNeuralNetwork(object):
 
-    def __init__(self, name, structure):
+    def __init__(self, program, name, structure):
+        self.program = program
         self.name = name
         self.n_neurons = structure                  # [n_neurons_in, n_neurons_hidden1, ..., n_neurons_hiddenH, n_neurons_out]
         self.ol_index = len(self.n_neurons)-1       # output layer index
@@ -110,9 +111,13 @@ class ArtificialNeuralNetwork(object):
                 print ', synapses_out:', [syn.id for syn in neuron.synapses_out]
             except AttributeError:
                 pass
+            except TypeError:
+                pass
             try:
                 print ', synapses_in:', [syn.id for syn in neuron.synapses_in]
             except AttributeError:
+                pass
+            except TypeError:
                 pass
 
         for synapse in self.synapsesG:
@@ -129,7 +134,7 @@ class ArtificialNeuron(object):
         self.synapses_out = None
         self.z = None                   # Unactivated value of neuron (sometimes also 'a')
         self.d = None                   # Delta : for back-propagation
-        self.bias = None
+        self.bias = float()
 
         # Register self
         self.gind = len(self.net.neuronsG)
@@ -241,6 +246,7 @@ class ArtificialSynapse(object):
 
     def remove_self(self):
         self.net.synapses_exist[self.neuron_from.layer_ind][self.neuron_to.layer_pos][self.neuron_from.layer_pos] = 0.0
+        self.set_weight_w(0.0)
         self.neuron_from.synapses_out.remove(self)
         self.neuron_to.synapses_in.remove(self)
         self.net.synapsesG.remove(self)
