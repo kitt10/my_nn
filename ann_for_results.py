@@ -135,6 +135,9 @@ class ArtificialNeuralNetwork(object):
         for arr in self.biases:
             net_copy.biases.append(np.array(arr, copy=True))
 
+        for synapse_new, synapse_old in zip(net_copy.synapsesG, self.synapsesG):
+            synapse_new.init_weight = synapse_old.init_weight
+
         for synapse in net_copy.synapsesG[:]:
             synapse.set_weight()
             if synapse.weight == 0:
@@ -199,6 +202,7 @@ class ArtificialNeuron(object):
                 synapse_out.remove_self()
         except TypeError:
             pass
+
 
 class ArtificialInputNeuron(ArtificialNeuron):
 

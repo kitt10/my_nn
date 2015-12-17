@@ -62,3 +62,6 @@ def plot_t01_sr_lr_ep(input_file):
         plt.show()
     except IOError:
         print 'Tento soubor neexistuje.'
+
+def plot_results_for_report_xor(data):
+    pass

@@ -6,6 +6,7 @@ from ann_support_tools import sigmoid, sigmoid_prime
 from random import shuffle
 from time import time
 import numpy as np
+from ann_plotting import plot_results_for_report_xor
 
 
 class BackPropagation(object):
@@ -22,16 +23,17 @@ class BackPropagation(object):
         net.learning = self
         self.mini_batch_size = 10
 
-    def learn(self, training_data, convergence_test=False, allowed_fall=0.05, threshold_trained=0.9):
+    def learn(self, training_data, convergence_test=False, allowed_drop=0.05, threshold_trained=0.9):
         self.sr_history = list()
 
+        total_time = 0.0
         for epoch in xrange(1, self.epochs+1):
             shuffle(training_data)
             mini_batches = [training_data[k:k+self.mini_batch_size] for k in xrange(0, len(training_data), self.mini_batch_size)]
             t0 = time()
             for mini_batch in mini_batches:
                 self.update_mini_batch(mini_batch)
-            processing_time = time()-t0
+            total_time += time()-t0
 
             self.program.dataset.evaluate()
             self.sr_history.append(self.program.dataset.success_rate)
@@ -39,12 +41,12 @@ class BackPropagation(object):
             #print self.program.dataset.get_pretty_evaluation_str(epoch, time=processing_time)
 
             if convergence_test:
-                if self.sr_history[-1] >= threshold_trained-allowed_fall:
-                    return True
+                if self.sr_history[-1] >= threshold_trained-allowed_drop:
+                    return True, epoch, float(total_time)/epoch
                 else:
                     try:
-                        if abs(self.sr_history[-1]-self.sr_history[-5]) <= 0.01:
-                            return False
+                        if abs(self.sr_history[-1]-self.sr_history[-self.program.convergence_history]) <= self.program.convergence_fail_th:
+                            return False, epoch, float(total_time)/epoch
                     except IndexError:
                         pass
 
@@ -99,8 +101,14 @@ class AI4(object):
         self.original_n_synapses = None
         self.dataset = None
         self.learning = None
+        self.epochs_needed = None
+        self.average_epoch_time = None
+        self.n_synapses_to_remove = None
         self.learning_th = 0.9
-        self.learning_rate = 0.5
+        self.learning_rate = 10.0
+        self.convergence_history = 5
+        self.convergence_fail_th = 0.005        # if it doesn't change of 0.5% in five epochs...
+        self.allowed_drop = 0.01
 
     def convergence_kept(self, tested_net):
         print '-- evaluation after removing synapses'
@@ -109,61 +117,51 @@ class AI4(object):
         print self.dataset.get_pretty_evaluation_str()
 
         self.learning.net = tested_net
-        ret = self.learning.learn(training_data=self.dataset.training_data, convergence_test=True, allowed_fall=0.05, threshold_trained=self.learning_th)
+        ret, epochs_needed, av_epoch_time = self.learning.learn(training_data=self.dataset.training_data, convergence_test=True, allowed_drop=self.allowed_drop, threshold_trained=self.learning_th)
 
+        self.epochs_needed = epochs_needed
+        self.average_epoch_time = av_epoch_time
         self.dataset.net = program.net
         self.learning.net = program.net
         return ret
 
+    def record_net(self, layer0_dict, layer1_dict):
+        for input_neuron in self.net.neuronsLP[0]:
+            layer0_dict[input_neuron.layer_pos] = [synapse.neuron_to.layer_pos for synapse in input_neuron.synapses_out]
 
-def cut_synapses_l0(a):
-    """ cuts synapses with weights lower than the mean weight change """
-    mean_change = np.mean([abs(synapse.get_weight()-synapse.init_weight) for synapse in a.synapsesG])
-    c = 0
-    for synapse in a.synapsesG[:]:
-        synapse.set_weight()
-        if abs(synapse.weight-synapse.init_weight) < mean_change:
-            synapse.remove_self()
-            c += 1
-    print 'Removed', c, 'synapses by level 0 cutting.'
+        for hidden_neuron in self.net.neuronsLP[1]:
+            layer1_dict[hidden_neuron.layer_pos] = [synapse.neuron_to.layer_pos for synapse in hidden_neuron.synapses_out]
 
-
-def cut_synapses_l1(net):
-    """ cuts synapses with weights lower than the 1st quartile (25%) weight change """
-    q_change = np.percentile([abs(synapse.get_weight()-synapse.init_weight) for synapse in net.synapsesG], 25)
+def cut_synapses(net, level):
+    """ cuts synapses """
+    if level > 0:
+        th_change = np.percentile([abs(synapse.get_weight()-synapse.init_weight) for synapse in net.synapsesG], level)
+    else:
+        th_change = min([abs(synapse.get_weight()-synapse.init_weight) for synapse in net.synapsesG])
 
     c = 0
     for synapse in net.synapsesG[:]:
         synapse.set_weight()
-        if abs(synapse.weight-synapse.init_weight) < q_change:
+        if abs(synapse.weight-synapse.init_weight) <= th_change:
             synapse.remove_self()
             c += 1
-    print 'Removed', c, 'synapses by level 1 cutting.'
-
-
-def cut_synapses_l2(net):
-    """ cuts synapses with minimal weights change """
-    min_change = min([abs(synapse.get_weight()-synapse.init_weight) for synapse in net.synapsesG])
-
-    c = 0
-    for synapse in net.synapsesG[:]:
-        synapse.set_weight()
-        if abs(synapse.weight-synapse.init_weight) == min_change:
-            synapse.remove_self()
-            c += 1
-    print 'Removed', c, 'synapses by level 2 cutting.'
+    program.n_synapses_to_remove = c
+    print 'Trying to remove', program.n_synapses_to_remove, 'synapses. May I? Percentile:', level
 
 if __name__ == '__main__':
 
+    ''' Saving stats '''
+    stats = dict()
+
     ''' Init new program '''
     program = AI4()
-    #program.net_structure = [2, 15, 1]
-    program.net_structure = [784, 15, 10]
+    program.net_structure = [2, 15, 1]
+    #program.net_structure = [784, 25, 10, 10]
     program.net = ArtificialNeuralNetwork(program=program, name=str(program.net_structure), structure=program.net_structure)
     program.original_n_synapses = len(program.net.synapsesG)
 
-    #program.dataset = XOR()
-    program.dataset = HandwrittenDigits()
+    program.dataset = XOR()
+    #program.dataset = HandwrittenDigits()
     program.dataset.net = program.net
     program.learning = BackPropagation(prg=program, net=program.net)
     program.learning.learning_rate = program.learning_rate
@@ -171,21 +169,42 @@ if __name__ == '__main__':
     program.learning.learn(training_data=program.dataset.training_data, threshold_trained=program.learning_th)
     print 'Learned. Reached', program.dataset.get_pretty_evaluation_str()
 
-    cutting_functions = [cut_synapses_l0, cut_synapses_l1, cut_synapses_l2]
-    cutting_level = 0
+    cutting_levels = [75, 60, 50, 45, 40, 35, 30, 25, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+    cutting_level_ind = 0
 
     min_structure_found = False
     step = 0
 
+    ''' Stats '''
+    stats[step] = dict()
+    stats[step]['n_synapses'] = len(program.net.synapsesG)
+    stats[step]['n_neurons'] = sum([not neuron.dead for neuron in program.net.neuronsG])
+    stats[step]['n_dead_neurons'] = sum([neuron.dead for neuron in program.net.neuronsG])
+    stats[step]['n_dead_neurons_by_layer'] = [sum([neuron.dead for neuron in layer]) for layer in program.net.neuronsLP.values()]
+    stats[step]['net_structure'] = [_all-_dead for _all, _dead in zip(program.net_structure, stats[step]['n_dead_neurons_by_layer'])]
+    stats[step]['cut_percentile'] = cutting_levels[cutting_level_ind]
+    stats[step]['required_accuracy'] = program.learning_th
+    stats[step]['allowed_drop'] = program.allowed_drop
+    stats[step]['accuracy'] = program.dataset.success_rate
+    stats[step]['plus_epochs_needed'] = program.epochs_needed
+    stats[step]['average_epoch_time'] = program.average_epoch_time
+
+    # Detailed net's stats
+    stats[step]['influenced_neurons_by_i0_neuron'] = dict()
+    stats[step]['influenced_neurons_by_h1_neuron'] = dict()
+    program.record_net(stats[step]['influenced_neurons_by_i0_neuron'], stats[step]['influenced_neurons_by_h1_neuron'])
+
     while not min_structure_found:
+
+        ''' Console info '''
+        print 'Dead neurons (total / by layer):', stats[step]['n_dead_neurons'], stats[step]['n_dead_neurons_by_layer']
+        print 'Number of synapses:', stats[step]['n_synapses'], ', Current structure:', stats[step]['net_structure']
+
         step += 1
-
+        stats[step] = dict()
+        stats[step]['influenced_neurons_by_i0_neuron'] = dict()
+        stats[step]['influenced_neurons_by_h1_neuron'] = dict()
         print '\n## STEP', step
-
-        print 'Dead neurons (total / by layer):', sum([neuron.dead for neuron in program.net.neuronsG]), '/',
-        for layer in program.net.neuronsLP.values():
-            print sum([neuron.dead for neuron in layer]),
-        print 'Number of synapses:', len(program.net.synapsesG)
 
         ''' Make a copy of the net '''
         net_tmp = program.net.copy()
@@ -193,17 +212,44 @@ if __name__ == '__main__':
         ''' Try to delete some connections '''
         print 'Looking for connections to delete...'
         try:
-            cutting_functions[cutting_level](net_tmp)
+            cut_synapses(net=net_tmp, level=cutting_levels[cutting_level_ind])
         except IndexError:
             min_structure_found = True
 
         ''' Is it still good now, after cutting synapses? '''
         if program.convergence_kept(net_tmp):
             program.net = net_tmp.copy()
+            stats[step]['accuracy'] = program.dataset.success_rate
+            stats[step]['plus_epochs_needed'] = program.epochs_needed
+            stats[step]['average_epoch_time'] = program.average_epoch_time
+            stats[step]['cut_percentile'] = cutting_levels[cutting_level_ind]
             print '\n\n -- Convergence kept in step', step, ': TMP saved. Continue cutting...'
         else:
-            cutting_level += 1
-            print '\n\n -- Convergence broken in step', step, ': TMP discarded. Cutting level increased to', cutting_level
+            stats[step]['accuracy'] = stats[step-1]['accuracy']
+            stats[step]['plus_epochs_needed'] = stats[step-1]['plus_epochs_needed']
+            stats[step]['average_epoch_time'] = stats[step-1]['average_epoch_time']
+            stats[step]['cut_percentile'] = stats[step-1]['cut_percentile']
+            if program.n_synapses_to_remove == 1:
+                print '-- Convergence broken in step', step, ': TMP discarded.'
+                print 'NOT only a single synapse possible to remove -> final structure found'
+                min_structure_found = True
+            else:
+                cutting_level_ind += 1
+                print '\n\n -- Convergence broken in step', step, ': TMP discarded. Cutting level index increased to', cutting_level_ind, \
+                    'which is',
+                try:
+                    print 'percentile', cutting_levels[cutting_level_ind]
+                except IndexError:
+                    print 'cutting only the synapse with minimum change (only 1)'
+
+        stats[step]['n_synapses'] = len(program.net.synapsesG)
+        stats[step]['n_neurons'] = sum([not neuron.dead for neuron in program.net.neuronsG])
+        stats[step]['n_dead_neurons'] = sum([neuron.dead for neuron in program.net.neuronsG])
+        stats[step]['n_dead_neurons_by_layer'] = [sum([neuron.dead for neuron in layer]) for layer in program.net.neuronsLP.values()]
+        stats[step]['net_structure'] = [_all-_dead for _all, _dead in zip(program.net_structure, stats[step]['n_dead_neurons_by_layer'])]
+        stats[step]['required_accuracy'] = program.learning_th
+        stats[step]['allowed_drop'] = program.allowed_drop
+        program.record_net(stats[step]['influenced_neurons_by_i0_neuron'], stats[step]['influenced_neurons_by_h1_neuron'])
 
     print 'Final structure:',
     for layer in program.net.neuronsLP.values():
@@ -218,4 +264,14 @@ if __name__ == '__main__':
 
     print '\n\nLearning the final structure...'
 
-    program.learning.learn(training_data=program.dataset.training_data, threshold_trained=0.95)
+    program.learning.learn(training_data=program.dataset.training_data, threshold_trained=0.97)
+
+    #print [stats[step]['accuracy'] for step in stats.keys()]
+    #print [stats[step]['n_synapses'] for step in stats.keys()]
+    #last_step = sorted(stats.keys())[-1]
+    #ind_input_neuron = stats[last_step]['influenced_neurons_by_i0_neuron'].keys()[0]
+    #ind_hidden_neuron = stats[last_step]['influenced_neurons_by_h1_neuron'].keys()[1]
+    #print len(stats[last_step]['influenced_neurons_by_i0_neuron'][ind_input_neuron]), stats[last_step]['influenced_neurons_by_i0_neuron'][ind_input_neuron]
+    #print len(stats[last_step]['influenced_neurons_by_h1_neuron'][ind_hidden_neuron]), stats[last_step]['influenced_neurons_by_h1_neuron'][ind_hidden_neuron]
+
+    plot_results_for_report_xor(data=stats)
