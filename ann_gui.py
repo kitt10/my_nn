@@ -4,6 +4,7 @@ from PyQt4.QtGui import *
 from PyQt4.uic import loadUi
 from threading import Thread, ThreadError
 from random import choice
+from ann_plotting import *
 
 
 class ANNGui(object):
@@ -47,6 +48,7 @@ class ANNGui(object):
         # Datasets
         self.m_w.cob_datasets.currentIndexChanged.connect(self.dataset_changed)
         self.m_w.pb_dataset_regenerate.clicked.connect(self.dataset_regenerate)
+        self.m_w.pb_dts_show_data.clicked.connect(self.dataset_show)
 
         # Neural Net
         self.m_w.le_hidden_neurons.editingFinished.connect(self.nn_structure_changed)
@@ -62,6 +64,10 @@ class ANNGui(object):
 
         # Evaluation
         self.m_w.pb_evaluate_now.clicked.connect(self.just_evaluate)
+
+        # Tests
+        self.m_w.pb_tests_t01_run.clicked.connect(lambda: self.program.run_test(1))
+        self.m_w.pb_tests_t01_sr_lr_ep.clicked.connect(lambda: plot_t01_sr_lr_ep(input_file=str(self.m_w.le_tests_t01_output_file.text())))
 
         # View
         self.m_w.sb_neurons_size.valueChanged.connect(self.view_settings_changed)
@@ -94,6 +100,10 @@ class ANNGui(object):
         self.program.dataset.generate_data()
         self.dataset_changed()
 
+    def dataset_show(self):
+        self.m_w.view.init_scene()
+        self.m_w.view.show_dataset()
+
     def dataset_changed(self):
         self.program.dataset = self.program.datasets[self.m_w.cob_datasets.currentIndex()]
         self.m_w.l_dataset_description.setText(self.program.dataset.get_pretty_info_str())
@@ -107,6 +117,9 @@ class ANNGui(object):
         self.m_w.sb_dataset_n_samples.setEnabled(self.program.dataset.regeneration_allowed)
         self.m_w.sb_dataset_split_ratio.setEnabled(self.program.dataset.regeneration_allowed)
         self.m_w.pb_dataset_regenerate.setEnabled(self.program.dataset.regeneration_allowed)
+        self.m_w.pb_dts_show_data.setEnabled(self.program.dataset.show_allowed)
+        self.m_w.cb_dts_show_training.setEnabled(self.program.dataset.show_allowed)
+        self.m_w.cb_dts_show_testing.setEnabled(self.program.dataset.show_allowed)
 
         # Net Tab
         self.delete_net()
@@ -149,10 +162,6 @@ class ANNGui(object):
         self.m_w.l_net_structure.setStyleSheet('color: DarkGreen;')
         self.m_w.pb_nn_remove.setEnabled(True)
         self.m_w.l_learning_algorithm.setText(self.program.net.learning.name)
-        self.program.net.learning.epochs = self.m_w.sb_learning_epochs.value()
-        self.program.net.learning.evaluate_epochs = self.m_w.cb_learning_ev_each_epoch.isChecked()
-        self.program.net.learning.learning_rate = self.m_w.sb_learning_learning_rate.value()
-        self.program.net.learning.mini_batch_size = self.m_w.sb_learning_minibatch_size.value()
         self.m_w.pb_learning_train_net.setEnabled(True)
 
     def remove_synapse(self):
@@ -276,7 +285,7 @@ class View(QGraphicsView):
             neuron.g_y = neuron.layer_pos*self.ver_space
             neuron.g_axon_x = neuron.g_x+self.neuron_size+self.axon_len
             neuron.g_axon_y = neuron.g_y+self.neuron_size/2
-            neuron.g_body = self.scene().addEllipse(neuron.g_x, neuron.g_y, self.neuron_size, self.neuron_size,pen=self.pen_by_layer[neuron.id[0]])
+            neuron.g_body = self.scene().addEllipse(neuron.g_x, neuron.g_y, self.neuron_size, self.neuron_size, pen=self.pen_by_layer[neuron.id[0]])
             neuron.g_axon = self.scene().addLine(neuron.g_axon_x-self.axon_len, neuron.g_axon_y, neuron.g_axon_x, neuron.g_axon_y, pen=self.pen_axon)
             if self.show_neurons_ids:
                 neuron.g_text = self.scene().addText(neuron.id, QFont('Helvetica', self.neuron_font_size))
@@ -300,3 +309,28 @@ class View(QGraphicsView):
     def redraw_net(self):
         self.init_scene()
         self.draw_net()
+
+    def show_dataset(self):
+        # Settings
+        unit = 200
+        center = (self.parent.width()/2, self.parent.height()/2)
+
+        # Coordinates
+        self.scene().addLine(center[0], 0, center[0], self.parent.height(), pen=QPen(QColor('Black')))
+        self.scene().addLine(0, center[1], self.parent.width(), center[1], pen=QPen(QColor('Black')))
+
+        # Data
+        if self.m_w.cb_dts_show_training.isChecked():
+            for sample, target in zip(self.program.dataset.train_samples, self.program.dataset.train_targets):
+                if target[0] == 1:
+                    self.scene().addEllipse(center[0]+(unit*sample[0]), center[1]+(unit*sample[1]), 1, 1, pen=QPen(QColor('Red')))
+                else:
+                    self.scene().addEllipse(center[0]+(unit*sample[0]), center[1]+(unit*sample[1]), 1, 1, pen=QPen(QColor('Blue')))
+
+        if self.m_w.cb_dts_show_testing.isChecked():
+            for sample, target in zip(self.program.dataset.test_samples, self.program.dataset.test_targets):
+                if target[0] == 1:
+                    self.scene().addEllipse(center[0]+(unit*sample[0]), center[1]+(unit*sample[1]), 1, 1, pen=QPen(QColor('Pink')))
+                else:
+                    self.scene().addEllipse(center[0]+(unit*sample[0]), center[1]+(unit*sample[1]), 1, 1, pen=QPen(QColor('Aqua')))
+

@@ -2,6 +2,7 @@ __author__ = 'kitt'
 
 import numpy as np
 import random
+from time import time
 from ann_support_tools import sigmoid, sigmoid_prime
 
 
@@ -9,11 +10,12 @@ class ANNLearning(object):
 
     def __init__(self, program, learning_name, net):
         self.program = program
+        self.gui = self.program.gui
         self.name = learning_name
         self.net = net
-        self.learning_rate = None
-        self.epochs = None
-        self.evaluate_epochs = True
+        self.learning_rate = self.gui.m_w.sb_learning_learning_rate.value()
+        self.epochs = self.gui.m_w.sb_learning_epochs.value()
+        self.evaluate_epochs = self.gui.m_w.cb_learning_ev_each_epoch.isChecked()
         self.epochs_published = None
         self.evaluations = list()
 
@@ -28,24 +30,31 @@ class BackPropagation(ANNLearning):
 
     def __init__(self, program, net):
         ANNLearning.__init__(self, program, 'Fast Back-Prop using NumPy', net)
-        self.mini_batch_size = None
+        self.mini_batch_size = self.gui.m_w.sb_learning_minibatch_size.value()
 
-    def learn(self, training_data):
+    def learn(self, training_data, a_test=None):
         self.evaluations = list()
         self.epochs_published = 0
 
         for epoch in xrange(1, self.epochs+1):
             random.shuffle(training_data)
             mini_batches = [training_data[k:k+self.mini_batch_size] for k in xrange(0, len(training_data), self.mini_batch_size)]
+            t0 = time()
             for mini_batch in mini_batches:
                 self.update_mini_batch(mini_batch)
+            processing_time = time()-t0
 
-            if self.evaluate_epochs:
-                self.evaluations.append(self.program.dataset.get_pretty_evaluation_str(epoch))
+            if a_test:
+                self.program.dataset.evaluate()
+                a_test.append_epoch_results(time=processing_time, epoch=epoch)
             else:
-                self.evaluations.append('Epoch {0} completed.'.format(epoch))
+                if self.evaluate_epochs:
+                    self.program.dataset.evaluate()
+                    self.evaluations.append(self.program.dataset.get_pretty_evaluation_str(epoch, time=processing_time))
+                else:
+                    self.evaluations.append('Epoch {0} completed.'.format(epoch))
 
-            self.program.gui.m_w.cb_fake_epoch_done.setChecked(True)
+                self.program.gui.m_w.cb_fake_epoch_done.setChecked(True)
 
     def update_mini_batch(self, mini_batch):
         nabla_b = [np.zeros(b.shape) for b in self.net.biases]

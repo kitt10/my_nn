@@ -36,3 +36,7 @@ def vectorized_result(j, output_neurons):
     e = np.zeros((output_neurons, 1))
     e[j] = 1.0
     return e
+
+
+def norm(a_list, the_max=255):
+    return [float(item)/the_max for item in a_list]

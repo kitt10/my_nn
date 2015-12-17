@@ -106,22 +106,39 @@ class ArtificialNeuralNetwork(object):
 
     def print_net(self):
         for neuron in self.neuronsG:
-            print '\n\n', neuron.id, neuron.activity
-            try:
-                print ', synapses_out:', [syn.id for syn in neuron.synapses_out]
-            except AttributeError:
-                pass
-            except TypeError:
-                pass
-            try:
-                print ', synapses_in:', [syn.id for syn in neuron.synapses_in]
-            except AttributeError:
-                pass
-            except TypeError:
-                pass
+            if not neuron.dead:
+                print '\n\n', neuron.id, neuron.activity
+                try:
+                    print ', synapses_out:', [syn.id for syn in neuron.synapses_out]
+                except AttributeError:
+                    pass
+                except TypeError:
+                    pass
+                try:
+                    print ', synapses_in:', [syn.id for syn in neuron.synapses_in]
+                except AttributeError:
+                    pass
+                except TypeError:
+                    pass
+            else:
+                print 'neuron', neuron.id, 'dead.'
 
         for synapse in self.synapsesG:
             print '\n\n', synapse.id, synapse.weight
+
+    def copy(self):
+        net_copy = ArtificialNeuralNetwork(program=None, name=self.name+'_copy', structure=self.n_neurons[:])
+
+        net_copy.weights = np.array(self.weights, copy=True)
+        net_copy.biases = np.array(self.biases, copy=True)
+
+        for synapse in net_copy.synapsesG[:]:
+            synapse.set_weight()
+            synapse.init_weight = synapse.weight
+            if synapse.weight == 0:
+                synapse.remove_self()
+
+        return net_copy
 
 
 class ArtificialNeuron(object):
@@ -135,6 +152,7 @@ class ArtificialNeuron(object):
         self.z = None                   # Unactivated value of neuron (sometimes also 'a')
         self.d = None                   # Delta : for back-propagation
         self.bias = float()
+        self.dead = False
 
         # Register self
         self.gind = len(self.net.neuronsG)
@@ -165,6 +183,9 @@ class ArtificialNeuron(object):
     def set_bias_b(self, b):
         self.net.biases[self.layer_ind-1][self.layer_pos][0] = b
         self.set_bias()
+
+    def set_dead(self):
+        self.dead = True
 
 
 class ArtificialInputNeuron(ArtificialNeuron):
@@ -220,6 +241,7 @@ class ArtificialSynapse(object):
         self.neuron_from = neuron_from
         self.neuron_to = neuron_to
         self.weight = self.net.weights[self.neuron_from.layer_ind][self.neuron_to.layer_pos][self.neuron_from.layer_pos]
+        self.init_weight = self.weight
 
         # Register self
         self.gind = len(self.net.synapsesG)
@@ -248,7 +270,11 @@ class ArtificialSynapse(object):
         self.net.synapses_exist[self.neuron_from.layer_ind][self.neuron_to.layer_pos][self.neuron_from.layer_pos] = 0.0
         self.set_weight_w(0.0)
         self.neuron_from.synapses_out.remove(self)
+        if not self.neuron_from.synapses_out:
+            self.neuron_from.set_dead()
         self.neuron_to.synapses_in.remove(self)
+        if not self.neuron_to.synapses_in:
+            self.neuron_to.set_dead()
         self.net.synapsesG.remove(self)
         del self.net.synapsesNN[self.neuron_from][self.neuron_to]
         del self
