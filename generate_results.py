@@ -7,6 +7,7 @@ from random import shuffle
 from time import time
 import numpy as np
 from ann_plotting import plot_results_for_report_xor
+import pickle
 
 
 class BackPropagation(object):
@@ -53,6 +54,7 @@ class BackPropagation(object):
             if self.program.dataset.success_rate >= threshold_trained:
                 break
         print '\n'
+        return epoch
 
     def update_mini_batch(self, mini_batch):
         nabla_b = [np.zeros(b.shape) for b in self.net.biases]
@@ -105,7 +107,7 @@ class AI4(object):
         self.average_epoch_time = None
         self.n_synapses_to_remove = None
         self.learning_th = 0.9
-        self.learning_rate = 10.0
+        self.learning_rate = 0.1
         self.convergence_history = 5
         self.convergence_fail_th = 0.005        # if it doesn't change of 0.5% in five epochs...
         self.allowed_drop = 0.01
@@ -132,6 +134,7 @@ class AI4(object):
         for hidden_neuron in self.net.neuronsLP[1]:
             layer1_dict[hidden_neuron.layer_pos] = [synapse.neuron_to.layer_pos for synapse in hidden_neuron.synapses_out]
 
+
 def cut_synapses(net, level):
     """ cuts synapses """
     if level > 0:
@@ -155,8 +158,8 @@ if __name__ == '__main__':
 
     ''' Init new program '''
     program = AI4()
-    program.net_structure = [2, 15, 1]
-    #program.net_structure = [784, 25, 10, 10]
+    program.net_structure = [2, 100, 1]
+    #program.net_structure = [784, 15, 10]
     program.net = ArtificialNeuralNetwork(program=program, name=str(program.net_structure), structure=program.net_structure)
     program.original_n_synapses = len(program.net.synapsesG)
 
@@ -166,7 +169,7 @@ if __name__ == '__main__':
     program.learning = BackPropagation(prg=program, net=program.net)
     program.learning.learning_rate = program.learning_rate
 
-    program.learning.learn(training_data=program.dataset.training_data, threshold_trained=program.learning_th)
+    program.epochs_needed = program.learning.learn(training_data=program.dataset.training_data, threshold_trained=program.learning_th)
     print 'Learned. Reached', program.dataset.get_pretty_evaluation_str()
 
     cutting_levels = [75, 60, 50, 45, 40, 35, 30, 25, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
@@ -262,9 +265,9 @@ if __name__ == '__main__':
         print sum([neuron.dead for neuron in layer]),
     program.net.print_net()
 
-    print '\n\nLearning the final structure...'
+    #print '\n\nLearning the final structure...'
 
-    program.learning.learn(training_data=program.dataset.training_data, threshold_trained=0.97)
+    #program.learning.learn(training_data=program.dataset.training_data, threshold_trained=0.97)
 
     #print [stats[step]['accuracy'] for step in stats.keys()]
     #print [stats[step]['n_synapses'] for step in stats.keys()]
@@ -274,4 +277,5 @@ if __name__ == '__main__':
     #print len(stats[last_step]['influenced_neurons_by_i0_neuron'][ind_input_neuron]), stats[last_step]['influenced_neurons_by_i0_neuron'][ind_input_neuron]
     #print len(stats[last_step]['influenced_neurons_by_h1_neuron'][ind_hidden_neuron]), stats[last_step]['influenced_neurons_by_h1_neuron'][ind_hidden_neuron]
 
+    pickle.dump(stats, open('pickle/xor-2-100-1_test2.p', 'wb'))
     plot_results_for_report_xor(data=stats)
